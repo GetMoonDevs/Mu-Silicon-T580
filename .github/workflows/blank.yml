@@ -1,0 +1,54 @@
+name: Build Mu-Silicium (gtaxllte)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: 'Build Mode (DEBUG or RELEASE)'
+        required: true
+        default: 'RELEASE'
+        type: choice
+        options:
+          - RELEASE
+          - DEBUG
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Maximize Build Space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - name: Checkout Repository & Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Environment & Dependencies
+        run: |
+          sudo apt-get update
+          chmod +x ./setup_env.sh
+          ./setup_env.sh -p apt
+
+      - name: Build UEFI for Tab A 10.1 (gtaxllte)
+        run: |
+          MODE="${{ github.event.inputs.build_mode || 'RELEASE' }}"
+          chmod +x ./build_uefi.sh
+          ./build_uefi.sh -d gtaxllte -r "$MODE"
+
+      - name: Upload Built UEFI Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mu-Silicium-gtaxllte-${{ github.event.inputs.build_mode || 'RELEASE' }}
+          path: |
+            *.img
+            Build/**/*.fd
+            Build/**/*.img
+          if-no-files-found: error
