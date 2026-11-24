@@ -31,17 +31,46 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Environment & Dependencies
+      - name: Inspect Root & Setup Environment
         run: |
+          ls -la
           sudo apt-get update
-          chmod +x ./setup_env.sh
-          ./setup_env.sh -p apt
+          if [ -f "./setup_env.sh" ]; then
+            chmod +x ./setup_env.sh
+            ./setup_env.sh -p apt
+          else
+            sudo apt-get install -y \
+              build-essential \
+              uuid-dev \
+              iasl \
+              git \
+              python3 \
+              python3-pip \
+              gcc-aarch64-linux-gnu \
+              nasm \
+              bison \
+              flex \
+              libssl-dev
+          fi
 
       - name: Build UEFI for Tab A 10.1 (gtaxllte)
         run: |
           MODE="${{ github.event.inputs.build_mode || 'RELEASE' }}"
-          chmod +x ./build_uefi.sh
-          ./build_uefi.sh -d gtaxllte -r "$MODE"
+          if [ -f "./build.sh" ]; then
+            chmod +x ./build.sh
+            ./build.sh -d gtaxllte -r "$MODE" || ./build.sh -d gtaxllte
+          elif [ -f "./build_uefi.py" ]; then
+            python3 ./build_uefi.py -d gtaxllte -r "$MODE" || python3 ./build_uefi.py -d gtaxllte
+          elif [ -f "./build_uefi.sh" ]; then
+            chmod +x ./build_uefi.sh
+            ./build_uefi.sh -d gtaxllte -r "$MODE" || ./build_uefi.sh -d gtaxllte
+          elif [ -f "./build.py" ]; then
+            python3 ./build.py -d gtaxllte -r "$MODE" || python3 ./build.py -d gtaxllte
+          else
+            echo "ERROR: No recognized build script found in repository root."
+            find . -maxdepth 2 -not -path '*/.*'
+            exit 1
+          fi
 
       - name: Upload Built UEFI Image
         uses: actions/upload-artifact@v4
