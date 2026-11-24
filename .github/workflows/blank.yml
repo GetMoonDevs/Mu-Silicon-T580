@@ -26,14 +26,26 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h
 
-      - name: Checkout Repository & Submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Inspect Root & Setup Environment
+      - name: Checkout Device Repo & Clone Mu-Silicium
         run: |
-          ls -la
+          git clone --depth=1 "${{ github.server_url }}/${{ github.repository }}" device_files
+          git clone --recursive https://github.com/Project-Silicium/Mu-Silicium.git mu_silicium
+          ls -la device_files mu_silicium
+
+      - name: Integrate Device Files
+        run: |
+          TARGET_DIR=$(find mu_silicium -maxdepth 4 -type d -iname "*gtaxllte*" | head -n 1)
+          if [ -z "$TARGET_DIR" ]; then
+            TARGET_DIR="mu_silicium/Silicon/Samsung/Exynos7870Pkg/Devices/gtaxllte"
+            mkdir -p "$TARGET_DIR"
+          fi
+          cp -r device_files/* "$TARGET_DIR/" || true
+          rm -f "$TARGET_DIR/README.md"
+          ls -la "$TARGET_DIR"
+
+      - name: Setup Environment & Dependencies
+        run: |
+          cd mu_silicium
           sudo apt-get update
           if [ -f "./setup_env.sh" ]; then
             chmod +x ./setup_env.sh
@@ -55,6 +67,7 @@ jobs:
 
       - name: Build UEFI for Tab A 10.1 (gtaxllte)
         run: |
+          cd mu_silicium
           MODE="${{ github.event.inputs.build_mode || 'RELEASE' }}"
           if [ -f "./build.sh" ]; then
             chmod +x ./build.sh
@@ -67,8 +80,8 @@ jobs:
           elif [ -f "./build.py" ]; then
             python3 ./build.py -d gtaxllte -r "$MODE" || python3 ./build.py -d gtaxllte
           else
-            echo "ERROR: No recognized build script found in repository root."
-            find . -maxdepth 2 -not -path '*/.*'
+            echo "Build scripts in mu_silicium:"
+            ls -la
             exit 1
           fi
 
@@ -77,6 +90,9 @@ jobs:
         with:
           name: Mu-Silicium-gtaxllte-${{ github.event.inputs.build_mode || 'RELEASE' }}
           path: |
+            mu_silicium/*.img
+            mu_silicium/Build/**/*.fd
+            mu_silicium/Build/**/*.img
             *.img
             Build/**/*.fd
             Build/**/*.img
